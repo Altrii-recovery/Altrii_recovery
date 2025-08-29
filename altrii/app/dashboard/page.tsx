@@ -7,6 +7,7 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { AddDeviceForm } from "@/components/AddDeviceForm";
 import { LockButton } from "@/components/LockButton";
 import { LockCountdown } from "@/components/LockCountdown";
+import type { Device } from "@prisma/client";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -43,7 +44,7 @@ export default async function DashboardPage() {
         <div className="rounded border border-amber-400 bg-amber-50 p-4">
           <p className="font-medium">Subscription required</p>
           <p className="text-sm text-amber-800">
-            Add devices and download profiles are available on an active plan.
+            Adding devices and downloading profiles requires an active plan.
             <a className="underline ml-1" href="/subscription">
               Go to subscription →
             </a>
@@ -72,7 +73,7 @@ export default async function DashboardPage() {
 
         {user?.devices?.length ? (
           <ul className="space-y-2">
-            {user.devices.map((d) => (
+            {user.devices.map((d: Device) => (
               <li key={d.id} className="rounded border p-3">
                 <div className="flex items-center justify-between">
                   <div>
