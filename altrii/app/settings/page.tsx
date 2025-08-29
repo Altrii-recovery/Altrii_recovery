@@ -11,6 +11,14 @@ type BlockingSettings = {
   customAllowedDomains: string[];
 };
 
+type GetResp =
+  | { blocking: BlockingSettings }
+  | { error: string };
+
+type PutResp =
+  | { ok: true; blocking: BlockingSettings }
+  | { error: string };
+
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,9 +36,12 @@ export default function SettingsPage() {
     (async () => {
       try {
         const res = await fetch("/api/settings/blocking");
-        const data = await res.json();
-        if (res.ok && data.blocking) setB(data.blocking);
-        else setMsg(data?.error || "Failed to load settings");
+        const data: GetResp = await res.json();
+        if (res.ok && "blocking" in data) {
+          setB(data.blocking);
+        } else {
+          setMsg(("error" in data && data.error) || "Failed to load settings");
+        }
       } catch {
         setMsg("Network error");
       } finally {
@@ -39,17 +50,18 @@ export default function SettingsPage() {
     })();
   }, []);
 
-  function toggle(key: keyof BlockingSettings) {
-    if (key === "customAllowedDomains") return;
-    setB((prev) => ({ ...prev, [key]: !prev[key] as any }));
-  }
-
   function parseDomains(text: string) {
-    // split by newline/commas/spaces → unique → no protocol → no empty
-    const raw = text.split(/[\n,\s]+/).map((s) => s.trim()).filter(Boolean);
-    const cleaned = Array.from(new Set(
-      raw.map((d) => d.replace(/^https?:\/\//, "").replace(/\/+$/, ""))
-    ));
+    const raw = text
+      .split(/[\n,\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const cleaned = Array.from(
+      new Set(
+        raw.map((d) =>
+          d.replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase()
+        )
+      )
+    );
     setB((prev) => ({ ...prev, customAllowedDomains: cleaned }));
   }
 
@@ -62,13 +74,12 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ blocking: b }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setMsg(data?.error || "Failed to save");
+      const data: PutResp = await res.json();
+      if (!res.ok || ("error" in data && data.error)) {
+        setMsg(("error" in data && data.error) || "Failed to save");
         return;
       }
       setMsg("Saved ✓");
-      // Optionally refresh SSR pages to pick new settings
       router.refresh();
     } catch {
       setMsg("Network error");
@@ -89,17 +100,31 @@ export default function SettingsPage() {
         <>
           <section className="rounded border p-4 space-y-3">
             <label className="flex items-center gap-3">
-              <input type="checkbox" checked={b.adult} onChange={() => toggle("adult")} />
+              <input
+                type="checkbox"
+                checked={b.adult}
+                onChange={() => setB((p) => ({ ...p, adult: !p.adult }))}
+              />
               <span className="font-medium">Block adult content</span>
             </label>
 
             <label className="flex items-center gap-3">
-              <input type="checkbox" checked={b.social} onChange={() => toggle("social")} />
-              <span className="font-medium">Block social media (Instagram, Reddit, X/Twitter, YouTube)</span>
+              <input
+                type="checkbox"
+                checked={b.social}
+                onChange={() => setB((p) => ({ ...p, social: !p.social }))}
+              />
+              <span className="font-medium">
+                Block social media (Instagram, Reddit, X/Twitter, YouTube)
+              </span>
             </label>
 
             <label className="flex items-center gap-3">
-              <input type="checkbox" checked={b.gambling} onChange={() => toggle("gambling")} />
+              <input
+                type="checkbox"
+                checked={b.gambling}
+                onChange={() => setB((p) => ({ ...p, gambling: !p.gambling }))}
+              />
               <span className="font-medium">Block gambling</span>
             </label>
           </section>
@@ -107,13 +132,14 @@ export default function SettingsPage() {
           <section className="rounded border p-4">
             <h2 className="text-lg font-medium mb-2">Custom allowlist (optional)</h2>
             <p className="text-sm text-gray-600 mb-2">
-              One domain per line (e.g. <code>example.com</code>). These domains are allowed even if a category is blocked.
+              One domain per line (e.g. <code>example.com</code>). These domains are
+              allowed even if a category is blocked.
             </p>
             <textarea
               className="w-full min-h-[160px] border rounded p-2"
               value={domainsText}
               onChange={(e) => parseDomains(e.target.value)}
-              placeholder="example.com&#10;docs.myapp.com"
+              placeholder={"example.com\ndocs.myapp.com"}
             />
           </section>
 
