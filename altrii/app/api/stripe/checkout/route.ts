@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 
 export async function POST(req: Request) {
@@ -15,6 +15,8 @@ export async function POST(req: Request) {
 
   let user = await prisma.user.findUnique({ where: { email: session.user.email.toLowerCase() } });
   if (!user) return NextResponse.json({ error: "user not found" }, { status: 404 });
+
+  const stripe = getStripe();
 
   if (!user.stripeCustomerId) {
     const customer = await stripe.customers.create({ email: user.email });
