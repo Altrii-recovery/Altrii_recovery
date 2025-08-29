@@ -1,4 +1,3 @@
-// app/dashboard/page.tsx
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -7,6 +6,7 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { AddDeviceForm } from "@/components/AddDeviceForm";
 import { LockButton } from "@/components/LockButton";
 import { LockCountdown } from "@/components/LockCountdown";
+import { RefreshSubscriptionButton } from "@/components/RefreshSubscriptionButton";
 
 // Minimal shape we need to render devices
 type UIDevice = {
@@ -41,7 +41,6 @@ export default async function DashboardPage() {
       ? "Yearly (£90)"
       : "No plan";
 
-  // Cast to our minimal UI type (safe for rendering)
   const devices: UIDevice[] = (user?.devices ?? []) as unknown as UIDevice[];
 
   return (
@@ -76,6 +75,7 @@ export default async function DashboardPage() {
           <a href="/subscription" className="underline">
             Manage subscription
           </a>
+          <RefreshSubscriptionButton />
         </div>
       </section>
 

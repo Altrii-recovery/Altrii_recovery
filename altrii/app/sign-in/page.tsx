@@ -1,7 +1,9 @@
+// app/sign-in/page.tsx
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -15,14 +17,15 @@ export default function SignInPage() {
     setErr("");
     setLoading(true);
 
-    const r = await fetch("/api/auth/callback/credentials", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ csrfToken: "", email, password }).toString(),
+    const res = await signIn("credentials", {
+      redirect: false,
+      email,
+      password,
     });
 
     setLoading(false);
-    if (r.ok) {
+
+    if (res?.ok) {
       router.push("/dashboard");
     } else {
       setErr("Invalid email or password");
