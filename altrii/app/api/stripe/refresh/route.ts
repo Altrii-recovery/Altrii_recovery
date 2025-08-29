@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
 
-export async function POST(_req: NextRequest) {
+export async function POST() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -21,7 +21,6 @@ export async function POST(_req: NextRequest) {
 
   const stripe = getStripe();
 
-  // Get the most recent subscription for this customer
   const subs = await stripe.subscriptions.list({
     customer: user.stripeCustomerId,
     status: "all",
@@ -37,8 +36,8 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ ok: true, status: "inactive" });
   }
 
-  // Map priceId -> plan using your env vars
   const priceId = sub.items.data[0]?.price?.id || "";
+
   const plan =
     priceId === process.env.STRIPE_PRICE_MONTH
       ? "MONTH"
@@ -54,7 +53,7 @@ export async function POST(_req: NextRequest) {
     where: { id: user.id },
     data: {
       stripeSubscriptionId: sub.id,
-      planStatus: sub.status, // 'active', 'trialing', 'past_due', etc.
+      planStatus: sub.status,
       ...(plan ? { plan } : {}),
     },
   });
