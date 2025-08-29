@@ -7,7 +7,15 @@ import { SignOutButton } from "@/components/SignOutButton";
 import { AddDeviceForm } from "@/components/AddDeviceForm";
 import { LockButton } from "@/components/LockButton";
 import { LockCountdown } from "@/components/LockCountdown";
-import type { Device } from "@prisma/client";
+
+// Minimal shape we need to render devices
+type UIDevice = {
+  id: string;
+  name: string;
+  platform: string | null;
+  profileInstalled: boolean;
+  lockUntil: Date | null;
+};
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -32,6 +40,9 @@ export default async function DashboardPage() {
       : user?.plan === "YEAR"
       ? "Yearly (£90)"
       : "No plan";
+
+  // Cast to our minimal UI type (safe for rendering)
+  const devices: UIDevice[] = (user?.devices ?? []) as unknown as UIDevice[];
 
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-6">
@@ -71,15 +82,15 @@ export default async function DashboardPage() {
       <section className="rounded border p-4">
         <h2 className="text-lg font-medium mb-2">Devices</h2>
 
-        {user?.devices?.length ? (
+        {devices.length ? (
           <ul className="space-y-2">
-            {user.devices.map((d: Device) => (
+            {devices.map((d) => (
               <li key={d.id} className="rounded border p-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-medium">{d.name}</div>
                     <div className="text-sm text-gray-600">
-                      {d.platform} •{" "}
+                      {d.platform ?? "ios"} •{" "}
                       {d.profileInstalled ? "Profile installed" : "No profile"}
                       {d.lockUntil ? (
                         <>
@@ -116,7 +127,7 @@ export default async function DashboardPage() {
           <p>No devices yet. You can add up to 3 devices.</p>
         )}
 
-        {hasActivePlan && user && (user.devices?.length ?? 0) < 3 ? (
+        {hasActivePlan && user && (devices.length ?? 0) < 3 ? (
           <AddDeviceForm />
         ) : (
           <p className="mt-3 text-sm text-gray-600">
