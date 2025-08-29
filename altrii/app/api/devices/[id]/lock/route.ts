@@ -1,13 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 const MAX_MINUTES = 30 * 24 * 60; // 30 days
 
-type LockBody = {
-  minutes?: number;
-};
+type LockBody = { minutes?: number };
 
 function parseMinutes(json: unknown): number | null {
   const obj = (json ?? {}) as Record<string, unknown>;
@@ -19,13 +17,16 @@ function parseMinutes(json: unknown): number | null {
   return int;
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+// Next.js 15 expects: (request: NextRequest, context: { params: Promise<{ id: string }> })
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const minutes = parseMinutes(await req.json().catch(() => ({} as LockBody)));
+  const minutes = parseMinutes(await request.json().catch(() => ({} as LockBody)));
   if (minutes === null) {
     return NextResponse.json({ error: "minutes (number) required" }, { status: 400 });
   }
@@ -47,8 +48,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   const device = await prisma.device.findFirst({
-    where: { id: params.id, userId: user.id },
-    select: { id: true, lockUntil: true, name: true, platform: true, profileInstalled: true },
+    where: { id, userId: user.id },
+    select: { id: true, lockUntil: true },
   });
   if (!device) {
     return NextResponse.json({ error: "device not found" }, { status: 404 });
@@ -61,10 +62,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (device.lockUntil && device.lockUntil.getTime() > now) {
     if (requestedUntil.getTime() < device.lockUntil.getTime()) {
       return NextResponse.json(
-        {
-          error: "cannot shorten existing lock",
-          currentLockUntil: device.lockUntil.toISOString(),
-        },
+        { error: "cannot shorten existing lock", currentLockUntil: device.lockUntil.toISOString() },
         { status: 400 }
       );
     }
