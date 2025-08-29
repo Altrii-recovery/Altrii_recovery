@@ -1,62 +1,62 @@
-function xmlEscape(s: string) {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
+export type BlockingSettings = {
+  adult: boolean;
+  social: boolean;
+  gambling: boolean;
+  customAllowedDomains: string[];
+};
+
+export function buildBlockedDomains(b: BlockingSettings): string[] {
+  const baseAdult = [
+    // (placeholder sample; you will maintain a real list server-side)
+    "pornhub.com","xnxx.com","xvideos.com","redtube.com",
+  ];
+  const social = ["instagram.com","reddit.com","twitter.com","x.com","youtube.com","tiktok.com","facebook.com"];
+  const gambling = ["bet365.com","williamhill.com","pokerstars.com","ladbrokes.com"];
+
+  const out = new Set<string>();
+
+  if (b.adult) baseAdult.forEach((d) => out.add(d));
+  if (b.social) social.forEach((d) => out.add(d));
+  if (b.gambling) gambling.forEach((d) => out.add(d));
+
+  // Remove any domains explicitly allowed
+  b.customAllowedDomains.forEach((allow) => out.delete(allow.toLowerCase()));
+
+  return Array.from(out);
 }
 
-function plistArray(items: string[]) {
-  return items.map((i) => `<string>${xmlEscape(i)}</string>`).join("");
-}
-
-export function mobileconfigXML(opts: {
+// Builds a minimal .mobileconfig payload (content filter focus)
+export function buildMobileconfig({
+  deviceId,
+  blocking,
+}: {
   deviceId: string;
-  displayName: string;
-  blockedDomains: string[];
-  allowedDomains: string[];
-}): string {
-  const rootUUID = crypto.randomUUID();
-  const filterUUID = crypto.randomUUID();
+  blocking: BlockingSettings;
+}) {
+  const blocked = buildBlockedDomains(blocking);
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>PayloadType</key><string>Configuration</string>
-  <key>PayloadVersion</key><integer>1</integer>
-  <key>PayloadIdentifier</key><string>com.altrii.profile.${xmlEscape(opts.deviceId)}</string>
-  <key>PayloadUUID</key><string>${rootUUID}</string>
-  <key>PayloadDisplayName</key><string>${xmlEscape(opts.displayName)}</string>
-  <key>PayloadDescription</key><string>Altrii Recovery content filter</string>
-  <key>PayloadRemovalDisallowed</key><true/>
-  <key>PayloadContent</key>
-  <array>
-    <dict>
-      <key>PayloadType</key><string>com.apple.webcontent-filter</string>
-      <key>PayloadVersion</key><integer>1</integer>
-      <key>PayloadIdentifier</key><string>com.altrii.profile.filter.${xmlEscape(opts.deviceId)}</string>
-      <key>PayloadUUID</key><string>${filterUUID}</string>
-      <key>PayloadDisplayName</key><string>Altrii Content Filter</string>
+  const profile = {
+    PayloadType: "Configuration",
+    PayloadVersion: 1,
+    PayloadIdentifier: `com.altriirecovery.content.${deviceId}`,
+    PayloadUUID: crypto.randomUUID(),
+    PayloadDisplayName: "Altrii Recovery Content Filter",
+    PayloadDescription: "Blocks configured categories and domains",
+    PayloadRemovalDisallowed: true,
+    PayloadContent: [
+      {
+        PayloadType: "com.apple.webcontent-filter",
+        PayloadIdentifier: `com.altriirecovery.webfilter.${deviceId}`,
+        PayloadUUID: crypto.randomUUID(),
+        PayloadDisplayName: "Altrii Filter",
+        FilterType: "BuiltIn",
+        AutoFilterEnabled: true,
+        RestrictWebEnabled: true,
+        BlacklistedURLs: blocked.map((d) => `http://${d}`).concat(blocked.map((d) => `https://${d}`)),
+        WhitelistedURLs: (blocking.customAllowedDomains || []).map((d) => `https://${d}`),
+      },
+    ],
+  };
 
-      <key>FilterType</key><string>BuiltIn</string>
-      <key>AutoFilterEnabled</key><true/>
-      <key>FilterBrowsers</key><true/>
-      <key>FilterSockets</key><true/>
-      <key>RestrictWebEnabled</key><true/>
-
-      <key>BlacklistedURLs</key>
-      <array>
-        ${plistArray(opts.blockedDomains)}
-      </array>
-
-      <key>WhitelistedURLs</key>
-      <array>
-        ${plistArray(opts.allowedDomains || [])}
-      </array>
-    </dict>
-  </array>
-</dict>
-</plist>`;
+  return profile;
 }
