@@ -68,7 +68,7 @@ export default async function DashboardPage() {
                       <div className="flex flex-col items-end gap-1">
                         <a
                           href={user.planStatus === "active" ? `/api/profile/${d.id}` : "#"}
-                          className={`rounded-lg border px-3 py-1 text-sm ${
+                          className={`rounded-lg border px-3 py-1 text-sm bg-white hover:bg-gray-50 ${
                             user.planStatus === "active" ? "hover:bg-gray-50" : "opacity-50 pointer-events-none"
                           }`}
                           aria-disabled={user.planStatus !== "active"}
