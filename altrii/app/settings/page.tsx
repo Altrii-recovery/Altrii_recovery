@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Label } from "@/components/ui/Label";
 import { Switch } from "@/components/ui/Switch";
 import { Alert } from "@/components/ui/Alert";
+import { toast } from "@/components/ui/Toaster";
 
 type BlockingSettings = {
   adult: boolean;
@@ -66,13 +66,18 @@ export default function SettingsPage() {
       });
       const data: PutResp = await res.json();
       if (!res.ok || ("error" in data && data.error)) {
-        setMsg(("error" in data && data.error) || "Failed to save");
+        const m = ("error" in data && data.error) || "Failed to save";
+        setMsg(m);
+        toast(m, "error");
         return;
       }
       setMsg("Saved ✓");
+      toast("Blocking settings saved", "success");
       router.refresh();
     } catch {
-      setMsg("Network error");
+      const m = "Network error";
+      setMsg(m);
+      toast(m, "error");
     } finally {
       setSaving(false);
     }
@@ -86,37 +91,41 @@ export default function SettingsPage() {
 
       {msg && <Alert>{msg}</Alert>}
 
-      <Card>
-        <CardHeader>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 items-center">
-            <div className="flex items-center gap-3">
-              <Switch checked={b.adult} onChange={(e) => setB((p) => ({ ...p, adult: e.currentTarget.checked }))} />
-              <Label>Block adult content</Label>
+      {loading ? (
+        <p>Loading…</p>
+      ) : (
+        <Card>
+          <CardHeader>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 items-center">
+              <div className="flex items-center gap-3">
+                <Switch checked={b.adult} onChange={(e) => setB((p) => ({ ...p, adult: e.currentTarget.checked }))} />
+                <Label>Block adult content</Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={b.social} onChange={(e) => setB((p) => ({ ...p, social: e.currentTarget.checked }))} />
+                <Label>Block social media</Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch checked={b.gambling} onChange={(e) => setB((p) => ({ ...p, gambling: e.currentTarget.checked }))} />
+                <Label>Block gambling</Label>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Switch checked={b.social} onChange={(e) => setB((p) => ({ ...p, social: e.currentTarget.checked }))} />
-              <Label>Block social media</Label>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label htmlFor="allowlist">Custom allowlist (one domain per line)</Label>
+            <Textarea
+              id="allowlist"
+              className="min-h-[160px]"
+              value={domainsText}
+              onChange={(e) => parseDomains(e.target.value)}
+              placeholder={"example.com\ndocs.myapp.com"}
+            />
+            <div className="pt-2">
+              <Button onClick={onSave} disabled={saving}>{saving ? "Saving…" : "Save settings"}</Button>
             </div>
-            <div className="flex items-center gap-3">
-              <Switch checked={b.gambling} onChange={(e) => setB((p) => ({ ...p, gambling: e.currentTarget.checked }))} />
-              <Label>Block gambling</Label>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label htmlFor="allowlist">Custom allowlist (one domain per line)</Label>
-          <Textarea
-            id="allowlist"
-            className="min-h-[160px]"
-            value={domainsText}
-            onChange={(e) => parseDomains(e.target.value)}
-            placeholder={"example.com\ndocs.myapp.com"}
-          />
-          <div className="pt-2">
-            <Button onClick={onSave} disabled={saving}>{saving ? "Saving…" : "Save settings"}</Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </main>
   );
 }

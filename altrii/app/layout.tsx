@@ -1,23 +1,21 @@
-import type { Metadata } from "next";
 import "./globals.css";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import { Toaster } from "@/components/ui/Toaster";
 
-// If you used Geist in the scaffold, import and apply them.
-// If not using fonts, you can remove these two lines.
-import { Geist, Geist_Mono } from "next/font/google";
-
-const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Altrii",
-  description: "Altrii Recovery",
+  title: "Altrii Recovery",
+  description: "Digital wellness with device locks and safe browsing",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background antialiased`}>
+      <body className={inter.className + " min-h-screen bg-background antialiased"}>
         {children}
+        <Toaster />
       </body>
     </html>
   );
