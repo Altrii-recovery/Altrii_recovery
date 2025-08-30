@@ -1,46 +1,60 @@
+// components/LockButton.tsx
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
-export function LockButton({ deviceId }: { deviceId: string }) {
-  const [hours, setHours] = useState<number>(1);
+export function LockButton({ deviceId, lockUntil }: { deviceId: string; lockUntil: string | null }) {
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const router = useRouter();
+  const [msg, setMsg] = useState<string>("");
 
-  async function lock() {
-    setErr("");
-    setLoading(true);
-    const res = await fetch(`/api/devices/${deviceId}/lock`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ hours }),
-    });
-    setLoading(false);
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setErr(data.error || "Failed to set lock");
+  const locked = lockUntil ? new Date(lockUntil).getTime() > Date.now() : false;
+
+  async function lockNow() {
+    setMsg("");
+    const input = prompt("Lock device for how many days? (1–30)", "1");
+    if (input == null) return;
+    const days = Number.parseInt(input, 10);
+    if (!Number.isFinite(days) || days < 1 || days > 30) {
+      setMsg("Please enter a whole number between 1 and 30.");
       return;
     }
-    router.refresh();
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/devices/${deviceId}/lock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days }),
+      });
+
+      const text = await res.text();
+      let data: any = null;
+      try { data = JSON.parse(text); } catch {}
+
+      if (!res.ok) {
+        const detail = (data && (data.error || data.detail)) || text || `status ${res.status}`;
+        setMsg(String(detail));
+        return;
+      }
+
+      window.location.reload();
+    } catch {
+      setMsg("Network error");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
     <div className="flex items-center gap-2">
-      <input
-        type="number"
-        min={1}
-        max={720}
-        value={hours}
-        onChange={(e) => setHours(Number(e.target.value))}
-        className="w-24 border rounded px-2 py-1"
-        aria-label="Lock duration (hours)"
-      />
-      <button onClick={lock} className="rounded border px-3 py-1" disabled={loading}>
-        {loading ? "Locking..." : "Lock"}
+      <button
+        onClick={lockNow}
+        disabled={loading || locked}
+        className="rounded border px-3 py-1 disabled:opacity-60"
+      >
+        {locked ? "Locked" : loading ? "Locking…" : "Lock"}
       </button>
-      {err && <span className="text-red-600 text-sm">{err}</span>}
+      {msg && <span className="text-sm text-red-600">{msg}</span>}
     </div>
   );
 }

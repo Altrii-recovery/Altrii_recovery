@@ -3,13 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-const MAX_MINUTES = 30 * 24 * 60; // 30 days
+const MAX_DAYS = 30; // 30 days
 
-type LockBody = { minutes?: number };
+type LockBody = { days?: number };
 
-function parseMinutes(json: unknown): number | null {
+function parseDays(json: unknown): number | null {
   const obj = (json ?? {}) as Record<string, unknown>;
-  const val = obj["minutes"];
+  const val = obj["days"];
   if (typeof val !== "number") return null;
   if (!Number.isFinite(val)) return null;
   const int = Math.floor(val);
@@ -17,7 +17,6 @@ function parseMinutes(json: unknown): number | null {
   return int;
 }
 
-// Next.js 15 expects: (request: NextRequest, context: { params: Promise<{ id: string }> })
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
 
@@ -26,11 +25,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const minutes = parseMinutes(await request.json().catch(() => ({} as LockBody)));
-  if (minutes === null) {
-    return NextResponse.json({ error: "minutes (number) required" }, { status: 400 });
+  const days = parseDays(await request.json().catch(() => ({} as LockBody)));
+  if (days === null) {
+    return NextResponse.json({ error: "days (number) required" }, { status: 400 });
   }
-  if (minutes > MAX_MINUTES) {
+  if (days > MAX_DAYS) {
     return NextResponse.json({ error: "max lock is 30 days" }, { status: 400 });
   }
 
@@ -42,7 +41,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: "user not found" }, { status: 404 });
   }
 
-  // Require active subscription to lock
   if (user.planStatus !== "active") {
     return NextResponse.json({ error: "subscription required" }, { status: 402 });
   }
@@ -56,9 +54,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   }
 
   const now = Date.now();
-  const requestedUntil = new Date(now + minutes * 60_000);
+  const requestedUntil = new Date(now + days * 24 * 60 * 60 * 1000);
 
-  // Do not allow shortening an existing active lock
   if (device.lockUntil && device.lockUntil.getTime() > now) {
     if (requestedUntil.getTime() < device.lockUntil.getTime()) {
       return NextResponse.json(
