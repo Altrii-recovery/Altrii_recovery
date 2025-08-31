@@ -19,7 +19,7 @@ function isoNow() {
   return new Date().toISOString();
 }
 
-// Placeholder lists — replace with your curated sets later.
+// --- Baseline domain lists (replace with your curated sets in production) ---
 const SOCIAL = [
   "instagram.com","www.instagram.com",
   "reddit.com","www.reddit.com",
@@ -53,6 +53,14 @@ function normalizeDomains(domains: string[]): string[] {
   return Array.from(new Set(cleaned)).sort();
 }
 
+/**
+ * Build a combined .mobileconfig with:
+ * 1) Web Content Filter payload (BuiltIn) + ContentFilterUUID (required on unsupervised)
+ * 2) DNS Settings payload that forces DNS-over-HTTPS to Cloudflare Family
+ *
+ * Cloudflare Family DoH endpoint blocks adult & malware by default:
+ *   https://family.cloudflare-dns.com/dns-query
+ */
 export function buildContentFilterMobileconfig(opts: {
   userEmail: string;
   deviceName: string;
@@ -61,6 +69,7 @@ export function buildContentFilterMobileconfig(opts: {
 }) {
   const { userEmail, deviceName, deviceId, blocking } = opts;
 
+  // Collect block/allow lists
   let deny: string[] = [];
   if (blocking.adult) deny = deny.concat(ADULT);
   if (blocking.social) deny = deny.concat(SOCIAL);
@@ -77,9 +86,13 @@ export function buildContentFilterMobileconfig(opts: {
     .join("\n        ");
 
   // UUIDs
-  const payloadUUID = randomUUID();           // Profile container UUID
-  const filterPayloadUUID = randomUUID();     // The webcontent filter payload UUID
-  const contentFilterUUID = randomUUID();     // REQUIRED on unsupervised iOS/iPadOS
+  const profileUUID = randomUUID();              // Profile container UUID
+  const wcfPayloadUUID = randomUUID();           // Web Content Filter payload UUID
+  const contentFilterUUID = randomUUID();        // REQUIRED on unsupervised iOS/iPadOS
+  const dnsPayloadUUID = randomUUID();           // DNS Settings payload UUID
+
+  // Cloudflare Family DoH endpoint (adult/malware filtering)
+  const CLOUDFLARE_FAMILY_DOH = "https://family.cloudflare-dns.com/dns-query";
 
   const profile = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -88,18 +101,19 @@ export function buildContentFilterMobileconfig(opts: {
   <key>PayloadType</key> <string>Configuration</string>
   <key>PayloadVersion</key> <integer>1</integer>
   <key>PayloadIdentifier</key> <string>com.altrii.profile.${xml(deviceId)}</string>
-  <key>PayloadUUID</key> <string>${xml(payloadUUID)}</string>
-  <key>PayloadDisplayName</key> <string>Altrii Recovery – Safe Browsing</string>
+  <key>PayloadUUID</key> <string>${xml(profileUUID)}</string>
+  <key>PayloadDisplayName</key> <string>Altrii – Safe Browsing (WCF + Encrypted DNS)</string>
   <key>PayloadDescription</key> <string>Profile for ${xml(deviceName)} (${xml(userEmail)}) generated ${xml(isoNow())}</string>
   <key>PayloadOrganization</key> <string>Altrii Recovery</string>
   <key>PayloadRemovalDisallowed</key> <false/>
   <key>PayloadContent</key>
   <array>
+    <!-- Web Content Filter payload -->
     <dict>
       <key>PayloadType</key> <string>com.apple.webcontent-filter</string>
       <key>PayloadVersion</key> <integer>1</integer>
       <key>PayloadIdentifier</key> <string>com.altrii.contentfilter.${xml(deviceId)}</string>
-      <key>PayloadUUID</key> <string>${xml(filterPayloadUUID)}</string>
+      <key>PayloadUUID</key> <string>${xml(wcfPayloadUUID)}</string>
       <key>PayloadDisplayName</key> <string>Altrii Web Content Filter</string>
 
       <!-- REQUIRED on unsupervised iOS/iPadOS -->
@@ -122,6 +136,22 @@ export function buildContentFilterMobileconfig(opts: {
       </array>
 
       <key>WhitelistEnabled</key> <false/>
+    </dict>
+
+    <!-- DNS Settings payload: force Cloudflare Family DoH -->
+    <dict>
+      <key>PayloadType</key> <string>com.apple.dnsSettings.managed</string>
+      <key>PayloadVersion</key> <integer>1</integer>
+      <key>PayloadIdentifier</key> <string>com.altrii.dns.${xml(deviceId)}</string>
+      <key>PayloadUUID</key> <string>${xml(dnsPayloadUUID)}</string>
+      <key>PayloadDisplayName</key> <string>Altrii Encrypted DNS</string>
+      <key>PayloadDescription</key> <string>Enforces Cloudflare Family DNS-over-HTTPS for ${xml(deviceName)} (${xml(userEmail)})</string>
+
+      <key>DNSSettings</key>
+      <dict>
+        <key>DNSProtocol</key> <string>HTTPS</string>
+        <key>ServerURL</key> <string>${xml(CLOUDFLARE_FAMILY_DOH)}</string>
+      </dict>
     </dict>
   </array>
 </dict>
