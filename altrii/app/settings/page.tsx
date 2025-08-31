@@ -1,15 +1,6 @@
-// app/settings/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Textarea } from "@/components/ui/Textarea";
-import { Label } from "@/components/ui/Label";
-import { Switch } from "@/components/ui/Switch";
-import { Alert } from "@/components/ui/Alert";
-import { toast } from "@/components/ui/Toaster";
 
 type BlockingSettings = {
   adult: boolean;
@@ -18,114 +9,130 @@ type BlockingSettings = {
   customAllowedDomains: string[];
 };
 
-type GetResp = { blocking: BlockingSettings } | { error: string };
-type PutResp = { ok: true; blocking: BlockingSettings } | { error: string };
+async function getCurrentSettings(): Promise<BlockingSettings> {
+  // We read them via a small API that returns the session user's blockingSettings.
+  const res = await fetch("/api/me", { cache: "no-store" });
+  if (!res.ok) throw new Error("failed to load settings");
+  const data = await res.json();
+  const s = (data?.user?.blockingSettings ?? {}) as Partial<BlockingSettings>;
+  return {
+    adult: s.adult ?? true,
+    social: s.social ?? false,
+    gambling: s.gambling ?? false,
+    customAllowedDomains: Array.isArray(s.customAllowedDomains) ? s.customAllowedDomains : [],
+  };
+}
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [b, setB] = useState<BlockingSettings>({
-    adult: true,
-    social: false,
-    gambling: false,
-    customAllowedDomains: [],
-  });
-
-  const router = useRouter();
+  const [msg, setMsg] = useState<string | null>(null);
+  const [adult, setAdult] = useState(true);
+  const [social, setSocial] = useState(false);
+  const [gambling, setGambling] = useState(false);
+  const [allowlistText, setAllowlistText] = useState("");
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/settings/blocking");
-        const data: GetResp = await res.json();
-        if (res.ok && "blocking" in data) setB(data.blocking);
-        else setMsg(("error" in data && data.error) || "Failed to load settings");
-      } catch {
-        setMsg("Network error");
+        const s = await getCurrentSettings();
+        setAdult(s.adult);
+        setSocial(s.social);
+        setGambling(s.gambling);
+        setAllowlistText(s.customAllowedDomains.join("\n"));
+      } catch (e) {
+        setMsg("Failed to load current settings");
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  function parseDomains(text: string) {
-    const raw = text.split(/[\n,\s]+/).map((s) => s.trim()).filter(Boolean);
-    const cleaned = Array.from(new Set(raw.map((d) => d.replace(/^https?:\/\//, "").replace(/\/+$/, "").toLowerCase())));
-    setB((prev) => ({ ...prev, customAllowedDomains: cleaned }));
-  }
-
-  async function onSave() {
+  async function save() {
     setSaving(true);
-    setMsg("");
-    try {
-      const res = await fetch("/api/settings/blocking", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blocking: b }),
-      });
-      const data: PutResp = await res.json();
-      if (!res.ok || ("error" in data && data.error)) {
-        const m = ("error" in data && data.error) || "Failed to save";
-        setMsg(m);
-        toast(m, "error");
-        return;
-      }
-      setMsg("Saved ✓");
-      toast("Blocking settings saved", "success");
-      router.refresh();
-    } catch {
-      const m = "Network error";
-      setMsg(m);
-      toast(m, "error");
-    } finally {
-      setSaving(false);
+    setMsg(null);
+    const domains = allowlistText
+      .split("\n")
+      .map((d) => d.trim())
+      .filter(Boolean);
+
+    const res = await fetch("/api/settings/blocking", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        adult,
+        social,
+        gambling,
+        customAllowedDomains: domains,
+      }),
+    });
+
+    if (res.ok) {
+      setMsg("Saved! Re-download your profile from the Dashboard to apply these changes.");
+    } else {
+      const j = await res.json().catch(() => ({}));
+      setMsg(j?.error || "Failed to save settings");
     }
+    setSaving(false);
   }
 
-  const domainsText = b.customAllowedDomains.join("\n");
+  if (loading) {
+    return <main className="mx-auto max-w-3xl p-6">Loading…</main>;
+    }
 
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Blocking Settings</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Settings</h1>
+        <a className="underline text-sm" href="/dashboard">Back to Dashboard</a>
+      </div>
 
-      {msg && <Alert>{msg}</Alert>}
+      <section className="rounded-lg border p-4 space-y-4">
+        <h2 className="text-lg font-medium">Blocking</h2>
 
-      {loading ? (
-        <p>Loading…</p>
-      ) : (
-        <Card>
-          <CardHeader>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 items-center">
-              <div className="flex items-center gap-3">
-                <Switch checked={b.adult} onChange={(e) => setB((p) => ({ ...p, adult: e.currentTarget.checked }))} />
-                <Label>Block adult content</Label>
-              </div>
-              <div className="flex items-center gap-3">
-                <Switch checked={b.social} onChange={(e) => setB((p) => ({ ...p, social: e.currentTarget.checked }))} />
-                <Label>Block social media</Label>
-              </div>
-              <div className="flex items-center gap-3">
-                <Switch checked={b.gambling} onChange={(e) => setB((p) => ({ ...p, gambling: e.currentTarget.checked }))} />
-                <Label>Block gambling</Label>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Label htmlFor="allowlist">Custom allowlist (one domain per line)</Label>
-            <Textarea
-              id="allowlist"
-              className="min-h-[160px]"
-              value={domainsText}
-              onChange={(e) => parseDomains(e.target.value)}
-              placeholder={"example.com\ndocs.myapp.com"}
-            />
-            <div className="pt-2">
-              <Button onClick={onSave} disabled={saving}>{saving ? "Saving…" : "Save settings"}</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} />
+          <span>Block adult content</span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={social} onChange={(e) => setSocial(e.target.checked)} />
+          <span>Block social media (Instagram, Reddit, X/Twitter, YouTube)</span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={gambling} onChange={(e) => setGambling(e.target.checked)} />
+          <span>Block gambling sites</span>
+        </label>
+
+        <div className="pt-2">
+          <label className="block text-sm font-medium mb-1">Allowlist (one domain per line)</label>
+          <textarea
+            className="w-full h-40 rounded border px-3 py-2 text-sm font-mono"
+            placeholder={"example.com\nnews.bbc.co.uk"}
+            value={allowlistText}
+            onChange={(e) => setAllowlistText(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Domains only (no https://). Example: <code>example.com</code>
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 pt-2">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+          {msg && <span className="text-sm">{msg}</span>}
+        </div>
+
+        <p className="text-xs text-gray-500">
+          After saving, go to the Dashboard and click <b>Download profile</b> to install the updated filter.
+        </p>
+      </section>
     </main>
   );
 }
