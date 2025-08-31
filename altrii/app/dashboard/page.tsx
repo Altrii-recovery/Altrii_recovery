@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { syncUserSubscriptionByEmail } from "@/lib/subscription";
 import { LockButton } from "@/components/LockButton";
 import { LockCountdown } from "@/components/LockCountdown";
+import { DeviceActions } from "@/components/DeviceActions";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
@@ -110,7 +111,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
                             : "Not locked"}
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-2">
+                        <DeviceActions id={d.id} name={d.name} lockUntilISO={lockUntilIso} />
                         <a
                           href={isActive ? `/api/profile/${d.id}` : "#"}
                           className={`rounded-lg border px-3 py-1 text-sm ${
