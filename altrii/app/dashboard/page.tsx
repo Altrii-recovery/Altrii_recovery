@@ -1,140 +1,119 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { redirect } from "next/navigation";
-import { syncUserSubscriptionByEmail } from "@/lib/subscription";
+import Link from "next/link";
 import { LockButton } from "@/components/LockButton";
 import { LockCountdown } from "@/components/LockCountdown";
-import { DeviceActions } from "@/components/DeviceActions";
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { MarkSupervisedButton } from "@/components/MarkSupervisedButton";
+import { DeviceBlockingForm } from "@/components/DeviceBlockingForm";
 
-type Search = { [key: string]: string | string[] | undefined };
+type BlockingSettings = {
+  adult: boolean;
+  social: boolean;
+  gambling: boolean;
+  customAllowedDomains: string[];
+};
 
-export default async function DashboardPage({ searchParams }: { searchParams: Search }) {
+function normalizeSettings(raw: unknown): BlockingSettings {
+  const fallback: BlockingSettings = { adult: true, social: false, gambling: false, customAllowedDomains: [] };
+  if (!raw || typeof raw !== "object") return fallback;
+  const r = raw as Record<string, unknown>;
+  return {
+    adult: typeof r.adult === "boolean" ? r.adult : true,
+    social: typeof r.social === "boolean" ? r.social : false,
+    gambling: typeof r.gambling === "boolean" ? r.gambling : false,
+    customAllowedDomains: Array.isArray(r.customAllowedDomains)
+      ? (r.customAllowedDomains.filter((d) => typeof d === "string") as string[])
+      : [],
+  };
+}
+
+export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) redirect("/sign-in");
-
-  // If we just returned from Stripe (?status=success), sync before rendering
-  const status = typeof searchParams.status === "string" ? searchParams.status : undefined;
-  if (status === "success") {
-    await syncUserSubscriptionByEmail(session.user.email);
+  if (!session?.user?.email) {
+    return (
+      <div className="p-6">
+        <p>Please sign in.</p>
+        <Link className="text-blue-600 underline" href="/sign-in">Go to Sign In</Link>
+      </div>
+    );
   }
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email.toLowerCase() },
     include: { devices: true },
   });
-  if (!user) redirect("/sign-in");
-
-  const isActive = user.planStatus === "active";
-  const planLabel =
-    user.plan === "MONTH" ? "Monthly (£12)" :
-    user.plan === "THREE_MONTH" ? "3 months (£30)" :
-    user.plan === "SIX_MONTH" ? "6 months (£50)" :
-    user.plan === "YEAR" ? "Yearly (£90)" : "No plan";
 
   return (
-    <main className="mx-auto max-w-4xl p-6 space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <nav className="flex items-center gap-4 text-sm">
-          <a className="underline" href="/settings">Blocking settings</a>
-          <a className="underline" href="/account">Account</a>
-        </nav>
+        <div className="flex items-center gap-3">
+          <Link className="rounded border px-3 py-1 text-sm hover:bg-muted" href="/settings">Settings</Link>
+          <Link className="rounded border px-3 py-1 text-sm hover:bg-muted" href="/setup/locked-mac">Locked Setup (Mac)</Link>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-medium">Subscription</h2>
-        </CardHeader>
-        <CardContent className="flex items-center justify-between gap-3">
-          <div className="text-sm">
-            <div>Status: <span className="font-medium">{user.planStatus ?? "inactive"}</span></div>
-            <div>Plan: <span className="font-medium">{planLabel}</span></div>
-          </div>
+      <section className="space-y-2">
+        <h2 className="text-lg font-medium">Your Devices</h2>
+        {!user?.devices?.length ? (
+          <p className="text-sm text-muted-foreground">
+            No devices yet. Add one below, then run <b>Locked Setup (Mac)</b> to make it non-removable.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {user.devices.map((d) => {
+              const supervised = (d as any).supervised as boolean | undefined;
+              const settings = normalizeSettings(d.blockingSettings as unknown);
 
-          <div className="flex items-center gap-2">
-            {isActive ? (
-              <form action="/api/stripe/portal" method="post">
-                <Button type="submit">Manage billing</Button>
-              </form>
-            ) : (
-              <>
-                <a href="/subscription" className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">
-                  Subscribe now
-                </a>
-                <form action="/api/stripe/refresh" method="post">
-                  <Button type="submit" className="text-xs px-3 py-2">Refresh</Button>
-                </form>
-              </>
-            )}
-            <a href="/settings" className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">
-              Blocking settings
-            </a>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-medium">Devices</h2>
-        </CardHeader>
-        <CardContent>
-          {isActive && user.devices.length < 3 && (
-            <form action="/api/devices" method="post" className="mb-4 flex items-center gap-2">
-              <input
-                type="text"
-                name="name"
-                placeholder="Device name (e.g., My iPhone)"
-                className="w-64 rounded border px-3 py-2 text-sm"
-                required
-              />
-              <input type="hidden" name="platform" value="ios" />
-              <Button type="submit">Add device</Button>
-              <span className="text-xs text-gray-500">You can register up to 3 devices.</span>
-            </form>
-          )}
-
-          {user.devices.length ? (
-            <ul className="space-y-3">
-              {user.devices.map((d) => {
-                const lockUntilIso = d.lockUntil ? d.lockUntil.toISOString() : null;
-                return (
-                  <li key={d.id} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium">{d.name}</div>
-                        <div className="text-sm text-gray-600">
-                          {d.lockUntil
-                            ? `Locked until ${new Date(d.lockUntil).toLocaleString()}`
-                            : "Not locked"}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <DeviceActions id={d.id} name={d.name} lockUntilISO={lockUntilIso} />
-                        <a
-                          href={isActive ? `/api/profile/${d.id}` : "#"}
-                          className={`rounded-lg border px-3 py-1 text-sm ${
-                            isActive ? "hover:bg-gray-50" : "opacity-50 pointer-events-none"
-                          }`}
-                          aria-disabled={!isActive}
+              return (
+                <li key={d.id} className="rounded border p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{d.name || "My iPhone"}</span>
+                        <span
+                          className={`rounded px-2 py-0.5 text-xs ${supervised ? "bg-green-600 text-white" : "bg-amber-500 text-white"}`}
+                          title={supervised ? "Non-removable profile enforced" : "Standard profile"}
                         >
-                          Download profile
-                        </a>
-                        <LockButton deviceId={d.id} lockUntil={lockUntilIso} />
-                        {lockUntilIso && <LockCountdown until={lockUntilIso} />}
+                          {supervised ? "Supervised" : "Standard"}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {d.platform} • {d.lockUntil ? "Locked until" : "Not locked"}
+                        {d.lockUntil ? <> {new Date(d.lockUntil).toLocaleString()}</> : null}
                       </div>
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-sm text-gray-700">No devices registered yet.</p>
-          )}
-        </CardContent>
-      </Card>
-    </main>
+
+                    <div className="flex flex-col items-end gap-2">
+                      <LockButton deviceId={d.id} lockUntil={d.lockUntil ? new Date(d.lockUntil).toISOString() : null} />
+                      {d.lockUntil && <LockCountdown until={new Date(d.lockUntil).toISOString()} />}
+                      {!supervised && <MarkSupervisedButton deviceId={d.id} />}
+                    </div>
+                  </div>
+
+                  {/* Per-device blocking settings */}
+                  <div>
+                    <h4 className="mb-2 text-sm font-medium">Blocking Settings</h4>
+                    <DeviceBlockingForm deviceId={d.id} initial={settings} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* Add device form */}
+      <section className="rounded border p-4">
+        <h3 className="mb-2 text-sm font-medium">Add a Device</h3>
+        <form className="flex gap-2" action="/api/devices" method="post">
+          <input name="name" placeholder="Device name" className="w-full rounded border px-3 py-2 text-sm" required />
+          <button className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground hover:opacity-90" type="submit">
+            Add
+          </button>
+        </form>
+      </section>
+    </div>
   );
 }
