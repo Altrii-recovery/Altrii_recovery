@@ -2,23 +2,21 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import { syncUserSubscriptionByEmail } from "@/lib/subscription";
 import { LockButton } from "@/components/LockButton";
 import { LockCountdown } from "@/components/LockCountdown";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
-export default async function DashboardPage() {
+type Search = { [key: string]: string | string[] | undefined };
+
+export default async function DashboardPage({ searchParams }: { searchParams: Search }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/sign-in");
 
-  // If we just returned from Stripe (?status=success), sync server-side first
-  const hdrs = headers();
-  const url = hdrs.get("x-url") || ""; // Next inserts full URL in some hosts; fallback to referer if needed
-  const search = url.includes("?") ? url.slice(url.indexOf("?")) : "";
-  const statusParam = new URLSearchParams(search).get("status");
-  if (statusParam === "success") {
+  // If we just returned from Stripe (?status=success), sync server-side before rendering
+  const status = typeof searchParams.status === "string" ? searchParams.status : undefined;
+  if (status === "success") {
     await syncUserSubscriptionByEmail(session.user.email);
   }
 
