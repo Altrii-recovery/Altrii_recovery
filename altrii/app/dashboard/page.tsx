@@ -14,7 +14,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) redirect("/sign-in");
 
-  // If we just returned from Stripe (?status=success), sync server-side before rendering
+  // If we just returned from Stripe (?status=success), sync before rendering
   const status = typeof searchParams.status === "string" ? searchParams.status : undefined;
   if (status === "success") {
     await syncUserSubscriptionByEmail(session.user.email);
@@ -72,6 +72,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
           <h2 className="text-lg font-medium">Devices</h2>
         </CardHeader>
         <CardContent>
+          {isActive && user.devices.length < 3 && (
+            <form action="/api/devices" method="post" className="mb-4 flex items-center gap-2">
+              <input
+                type="text"
+                name="name"
+                placeholder="Device name (e.g., My iPhone)"
+                className="w-64 rounded border px-3 py-2 text-sm"
+                required
+              />
+              <input type="hidden" name="platform" value="ios" />
+              <Button type="submit">Add device</Button>
+              <span className="text-xs text-gray-500">You can register up to 3 devices.</span>
+            </form>
+          )}
+
           {user.devices.length ? (
             <ul className="space-y-3">
               {user.devices.map((d) => {
