@@ -37,7 +37,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
     <main className="mx-auto max-w-4xl p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <a className="underline text-sm" href="/account">Account</a>
+        <nav className="flex items-center gap-4 text-sm">
+          <a className="underline" href="/settings">Blocking settings</a>
+          <a className="underline" href="/account">Account</a>
+        </nav>
       </div>
 
       <Card>
@@ -50,20 +53,25 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
             <div>Plan: <span className="font-medium">{planLabel}</span></div>
           </div>
 
-          {isActive ? (
-            <form action="/api/stripe/portal" method="post">
-              <Button type="submit">Manage billing</Button>
-            </form>
-          ) : (
-            <div className="flex items-center gap-2">
-              <a href="/subscription" className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">
-                Subscribe now
-              </a>
-              <form action="/api/stripe/refresh" method="post">
-                <Button type="submit" className="text-xs px-3 py-2">Refresh</Button>
+          <div className="flex items-center gap-2">
+            {isActive ? (
+              <form action="/api/stripe/portal" method="post">
+                <Button type="submit">Manage billing</Button>
               </form>
-            </div>
-          )}
+            ) : (
+              <>
+                <a href="/subscription" className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">
+                  Subscribe now
+                </a>
+                <form action="/api/stripe/refresh" method="post">
+                  <Button type="submit" className="text-xs px-3 py-2">Refresh</Button>
+                </form>
+              </>
+            )}
+            <a href="/settings" className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">
+              Blocking settings
+            </a>
+          </div>
         </CardContent>
       </Card>
 
