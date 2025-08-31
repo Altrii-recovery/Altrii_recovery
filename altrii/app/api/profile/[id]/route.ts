@@ -47,6 +47,25 @@ function expandToHttpHttps(domains: string[]): string[] {
   return out;
 }
 
+type BlockingShape = {
+  adult?: boolean;
+  social?: boolean;
+  gambling?: boolean;
+  customAllowedDomains?: string[];
+};
+
+function coerceBlocking(val: unknown): Required<BlockingShape> {
+  const o = (val && typeof val === "object" ? val as Record<string, unknown> : {});
+  return {
+    adult: typeof o.adult === "boolean" ? o.adult : true,
+    social: typeof o.social === "boolean" ? o.social : false,
+    gambling: typeof o.gambling === "boolean" ? o.gambling : false,
+    customAllowedDomains: Array.isArray(o.customAllowedDomains)
+      ? (o.customAllowedDomains as unknown[]).map(String).filter(Boolean)
+      : [],
+  };
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -64,20 +83,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  // Optional subscription gate (leave commented if you want free downloads):
+  // Optional subscription gate:
   // if (device.user.planStatus !== "active") {
   //   return NextResponse.json({ error: "subscription inactive" }, { status: 402 });
   // }
 
-  const blockingRaw = (device.user.blockingSettings as any) || {};
-  const adult = blockingRaw.adult ?? true;
-  const social = blockingRaw.social ?? false;
-  const gambling = blockingRaw.gambling ?? false;
+  const blocking = coerceBlocking(device.user.blockingSettings as unknown);
 
   let deny: string[] = [];
-  if (adult) deny = deny.concat(ADULT);
-  if (social) deny = deny.concat(SOCIAL);
-  if (gambling) deny = deny.concat(GAMBLING);
+  if (blocking.adult) deny = deny.concat(ADULT);
+  if (blocking.social) deny = deny.concat(SOCIAL);
+  if (blocking.gambling) deny = deny.concat(GAMBLING);
 
   const denyDomains = normalizeDomains(deny);
   const blockedDomains = expandToHttpHttps(denyDomains);
@@ -89,7 +105,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     blockedDomains,
   });
 
-  // If buildContentFilterMobileconfig returns string, convert to Buffer
   const body = typeof mobileconfig === "string" ? Buffer.from(mobileconfig, "utf8") : mobileconfig;
 
   return new NextResponse(body, {
