@@ -20,7 +20,6 @@ function isoNow() {
 }
 
 // Placeholder lists — replace with your curated sets later.
-// Keep them small in dev so profiles stay readable while testing.
 const SOCIAL = [
   "instagram.com","www.instagram.com",
   "reddit.com","www.reddit.com",
@@ -70,7 +69,6 @@ export function buildContentFilterMobileconfig(opts: {
   const denyList = normalizeDomains(deny);
   const allowList = normalizeDomains(blocking.customAllowedDomains || []);
 
-  // For iOS content filter, we’ll list both http:// and https:// variants.
   const denyXml = denyList
     .map((d) => `<string>http://${xml(d)}</string><string>https://${xml(d)}</string>`)
     .join("\n        ");
@@ -78,8 +76,10 @@ export function buildContentFilterMobileconfig(opts: {
     .map((d) => `<string>http://${xml(d)}</string><string>https://${xml(d)}</string>`)
     .join("\n        ");
 
-  const payloadUUID = randomUUID();
-  const filterUUID = randomUUID();
+  // UUIDs
+  const payloadUUID = randomUUID();           // Profile container UUID
+  const filterPayloadUUID = randomUUID();     // The webcontent filter payload UUID
+  const contentFilterUUID = randomUUID();     // REQUIRED on unsupervised iOS/iPadOS
 
   const profile = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -99,8 +99,11 @@ export function buildContentFilterMobileconfig(opts: {
       <key>PayloadType</key> <string>com.apple.webcontent-filter</string>
       <key>PayloadVersion</key> <integer>1</integer>
       <key>PayloadIdentifier</key> <string>com.altrii.contentfilter.${xml(deviceId)}</string>
-      <key>PayloadUUID</key> <string>${xml(filterUUID)}</string>
+      <key>PayloadUUID</key> <string>${xml(filterPayloadUUID)}</string>
       <key>PayloadDisplayName</key> <string>Altrii Web Content Filter</string>
+
+      <!-- REQUIRED on unsupervised iOS/iPadOS -->
+      <key>ContentFilterUUID</key> <string>${xml(contentFilterUUID)}</string>
 
       <key>FilterType</key> <string>BuiltIn</string>
       <key>AutoFilterEnabled</key> <true/>
@@ -118,7 +121,6 @@ export function buildContentFilterMobileconfig(opts: {
         ${allowXml}
       </array>
 
-      <!-- We keep whitelist mode off so allowed domains override blocks but not restrict everything -->
       <key>WhitelistEnabled</key> <false/>
     </dict>
   </array>
