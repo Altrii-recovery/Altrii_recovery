@@ -23,6 +23,8 @@ export default async function DashboardPage() {
     user.plan === "SIX_MONTH" ? "6 months (£50)" :
     user.plan === "YEAR" ? "Yearly (£90)" : "No plan";
 
+  const isActive = user.planStatus === "active";
+
   return (
     <main className="mx-auto max-w-4xl p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -39,9 +41,16 @@ export default async function DashboardPage() {
             <div>Status: <span className="font-medium">{user.planStatus ?? "inactive"}</span></div>
             <div>Plan: <span className="font-medium">{planLabel}</span></div>
           </div>
-          <form action="/api/stripe/portal" method="post">
-            <Button type="submit">Manage billing</Button>
-          </form>
+
+          {isActive ? (
+            <form action="/api/stripe/portal" method="post">
+              <Button type="submit">Manage billing</Button>
+            </form>
+          ) : (
+            <a href="/subscription" className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">
+              Subscribe now
+            </a>
+          )}
         </CardContent>
       </Card>
 
@@ -67,11 +76,11 @@ export default async function DashboardPage() {
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <a
-                          href={user.planStatus === "active" ? `/api/profile/${d.id}` : "#"}
-                          className={`rounded-lg border px-3 py-1 text-sm bg-white hover:bg-gray-50 ${
-                            user.planStatus === "active" ? "hover:bg-gray-50" : "opacity-50 pointer-events-none"
+                          href={isActive ? `/api/profile/${d.id}` : "#"}
+                          className={`rounded-lg border px-3 py-1 text-sm ${
+                            isActive ? "hover:bg-gray-50" : "opacity-50 pointer-events-none"
                           }`}
-                          aria-disabled={user.planStatus !== "active"}
+                          aria-disabled={!isActive}
                         >
                           Download profile
                         </a>
