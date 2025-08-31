@@ -40,7 +40,7 @@ export default function SettingsPage() {
         setSocial(s.social);
         setGambling(s.gambling);
         setAllowlistText(s.customAllowedDomains.join("\n"));
-      } catch (e) {
+      } catch {
         setMsg("Failed to load current settings");
       } finally {
         setLoading(false);

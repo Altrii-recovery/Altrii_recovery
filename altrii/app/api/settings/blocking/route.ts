@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 
 type Body = {
   adult?: boolean;
@@ -42,7 +43,8 @@ export async function POST(req: NextRequest) {
 
   const user = await prisma.user.update({
     where: { email: session.user.email.toLowerCase() },
-    data: { blockingSettings: clean as unknown as any },
+    // ✅ Use Prisma.InputJsonValue instead of any
+    data: { blockingSettings: clean as Prisma.InputJsonValue },
     select: { blockingSettings: true },
   });
 
