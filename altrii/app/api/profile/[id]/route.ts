@@ -4,14 +4,17 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { buildContentFilterMobileconfig } from "@/lib/profiles";
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+// Next.js 15 typed routes: params is a Promise<{ id: string }>
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const device = await prisma.device.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { user: true },
   });
 
